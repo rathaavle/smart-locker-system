@@ -222,11 +222,163 @@ export const initiateCheckIn = functions.https.onCall(
 );
 
 export const submitOtp = functions.https.onCall(
-  async (data: CheckOutRequest, context) => {
-    // TODO: implement in Task 5
-    throw new functions.https.HttpsError(
-      "unimplemented",
-      "Not implemented yet",
-    );
+  async (data: CheckOutRequest, _context) => {
+    const { lockerId, otp } = data;
+
+    // ── 1. Input validation ───────────────────────────────────────────────
+    if (!lockerId || typeof lockerId !== "string" || lockerId.trim() === "") {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "lockerId is required",
+      );
+    }
+
+    if (!otp || typeof otp !== "string" || otp.trim() === "") {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "otp is required",
+      );
+    }
+
+    const db = admin.firestore();
+    const rtdb = admin.database();
+
+    // ── 2. Get locker document ────────────────────────────────────────────
+    const lockerRef = db.collection("lockers").doc(lockerId.trim());
+    const lockerSnap = await lockerRef.get();
+
+    if (!lockerSnap.exists) {
+      throw new functions.https.HttpsError("not-found", "Locker not found");
+    }
+
+    const locker = lockerSnap.data()!;
+
+    // ── 3. Check OTP lockout ──────────────────────────────────────────────
+    const now = Date.now();
+    if (
+      locker.otpLockedUntil != null &&
+      locker.otpLockedUntil.toMillis() > now
+    ) {
+      return {
+        success: false,
+        error: "OTP_LOCKED",
+        lockedUntil: locker.otpLockedUntil.toMillis(),
+      };
+    }
+
+    // ── 4. Get active transaction ─────────────────────────────────────────
+    if (!locker.activeTransactionId) {
+      return { success: false, error: "OTP_USED" };
+    }
+
+    const transactionRef = db
+      .collection("transactions")
+      .doc(locker.activeTransactionId);
+    const transactionSnap = await transactionRef.get();
+
+    if (!transactionSnap.exists) {
+      return { success: false, error: "OTP_USED" };
+    }
+
+    const transaction = transactionSnap.data()!;
+
+    if (transaction.status !== "ACTIVE") {
+      return { success: false, error: "OTP_USED" };
+    }
+
+    // ── 5. Check OTP expiry ───────────────────────────────────────────────
+    if (isOtpExpired(transaction.otpExpiresAt)) {
+      return { success: false, error: "OTP_EXPIRED" };
+    }
+
+    // ── 6. Verify OTP (inside Firestore transaction to avoid race conditions) ──
+    const isValid = await verifyOtp(otp.trim(), transaction.otpHash);
+
+    if (!isValid) {
+      // Increment failed attempts atomically
+      const result = await db.runTransaction(async (txn) => {
+        const freshLockerSnap = await txn.get(lockerRef);
+        if (!freshLockerSnap.exists) {
+          throw new functions.https.HttpsError("not-found", "Locker not found");
+        }
+
+        const freshLocker = freshLockerSnap.data()!;
+        const newFailedAttempts = (freshLocker.failedOtpAttempts || 0) + 1;
+
+        if (newFailedAttempts >= 5) {
+          const lockedUntilMs = Date.now() + 15 * 60 * 1000;
+          const lockedUntilTimestamp =
+            admin.firestore.Timestamp.fromMillis(lockedUntilMs);
+          txn.update(lockerRef, {
+            failedOtpAttempts: 0,
+            otpLockedUntil: lockedUntilTimestamp,
+          });
+          return {
+            success: false,
+            error: "OTP_LOCKED" as const,
+            lockedUntil: lockedUntilMs,
+          };
+        } else {
+          txn.update(lockerRef, {
+            failedOtpAttempts: newFailedAttempts,
+          });
+          return { success: false, error: "OTP_INVALID" as const };
+        }
+      });
+
+      return result;
+    }
+
+    // ── 7. OTP is valid — complete checkout ───────────────────────────────
+    const checkOutAt = admin.firestore.Timestamp.now();
+
+    // a. Write UNLOCK command to RTDB
+    const commandAt = Math.floor(Date.now() / 1000); // Unix timestamp in seconds
+    try {
+      await rtdb.ref(`devices/${lockerId.trim()}`).update({
+        command: "UNLOCK",
+        commandAt: commandAt,
+      });
+    } catch (err) {
+      functions.logger.error(
+        "Failed to write UNLOCK command to RTDB during check-out",
+        err,
+      );
+      // Non-fatal: continue with Firestore updates
+    }
+
+    // b & c. Update transaction and locker atomically
+    try {
+      await db.runTransaction(async (txn) => {
+        // b. Update transaction: status = COMPLETED, checkOutAt = now, otpHash = null
+        txn.update(transactionRef, {
+          status: "COMPLETED",
+          checkOutAt: checkOutAt,
+          otpHash: null,
+        });
+
+        // c. Update locker: clear activeTransactionId, reset failed attempts and lockout
+        txn.update(lockerRef, {
+          activeTransactionId: null,
+          failedOtpAttempts: 0,
+          otpLockedUntil: null,
+        });
+      });
+    } catch (err) {
+      functions.logger.error(
+        "Failed to update Firestore during check-out",
+        err,
+      );
+      throw new functions.https.HttpsError(
+        "internal",
+        "Failed to complete check-out",
+      );
+    }
+
+    // d. Return success
+    return {
+      success: true,
+      message: "Check-out successful. Locker is unlocking.",
+    };
   },
 );
