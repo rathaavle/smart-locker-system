@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-// TODO: Full implementation in Task 15
+/// OTP Sent Confirmation Screen
+/// Validates: Requirements 2.5
 class OtpSentScreen extends StatelessWidget {
   const OtpSentScreen({super.key});
 
@@ -10,27 +11,53 @@ class OtpSentScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('OTP Sent'),
+        automaticallyImplyLeading: false, // Remove back button
       ),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.email_outlined,
-              size: 64,
-              color: Colors.green,
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'OTP has been sent to your email',
-              style: TextStyle(fontSize: 18),
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: () => context.go('/'),
-              child: const Text('Back to Dashboard'),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.email_outlined,
+                size: 80,
+                color: Colors.green,
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'OTP Sent Successfully!',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'An OTP has been sent to your email address.',
+                style: TextStyle(fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Please check your inbox and use the OTP to retrieve your items later.',
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 48),
+              ElevatedButton.icon(
+                onPressed: () => context.go('/'),
+                icon: const Icon(Icons.home),
+                label: const Text('Back to Dashboard'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
