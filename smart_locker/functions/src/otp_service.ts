@@ -8,9 +8,6 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-const db = admin.firestore();
-const rtdb = admin.database();
-
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type LockerState = "EMPTY" | "OPEN" | "FILLED" | "UNLOCKING";
@@ -27,24 +24,44 @@ export interface CheckOutRequest {
 
 // ── OTP Helpers (exported for testing) ────────────────────────────────────
 
+const SALT_ROUNDS = 10;
+const OTP_EXPIRY_HOURS = 24;
+
+/**
+ * Generates a cryptographically random 6-digit OTP string.
+ * Uses crypto.randomInt to ensure uniform distribution over [0, 1_000_000).
+ * Requirement 2.3: cryptographically random 6-digit OTP.
+ */
 export function generateOtp(): string {
-  // TODO: implement in Task 3
-  throw new Error("Not implemented");
+  const value = crypto.randomInt(0, 1_000_000);
+  return value.toString().padStart(6, "0");
 }
 
+/**
+ * Hashes a plain-text OTP using bcrypt with 10 salt rounds.
+ * Requirement 4.5: OTPs SHALL be stored in hashed form; plain-text never persisted.
+ */
 export async function hashOtp(otp: string): Promise<string> {
-  // TODO: implement in Task 3
-  throw new Error("Not implemented");
+  return bcrypt.hash(otp, SALT_ROUNDS);
 }
 
+/**
+ * Verifies a plain-text OTP against a bcrypt hash.
+ * Returns true if the OTP matches the hash, false otherwise.
+ */
 export async function verifyOtp(otp: string, hash: string): Promise<boolean> {
-  // TODO: implement in Task 3
-  throw new Error("Not implemented");
+  return bcrypt.compare(otp, hash);
 }
 
+/**
+ * Returns true if the OTP created at `createdAt` has expired (older than 24 hours).
+ * Requirement 4.1: OTP expiration time is 24 hours from generation.
+ */
 export function isOtpExpired(createdAt: admin.firestore.Timestamp): boolean {
-  // TODO: implement in Task 3
-  throw new Error("Not implemented");
+  const createdAtMs = createdAt.toMillis();
+  const nowMs = Date.now();
+  const elapsedHours = (nowMs - createdAtMs) / (1000 * 60 * 60);
+  return elapsedHours > OTP_EXPIRY_HOURS;
 }
 
 // ── Callable Functions ─────────────────────────────────────────────────────
