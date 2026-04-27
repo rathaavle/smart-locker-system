@@ -3,21 +3,43 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ── lockers collection ──────────────────────────────────────────────
-    // App (unauthenticated) boleh READ lockers untuk dashboard
-    // Hanya Admin SDK (Cloud Functions) yang boleh WRITE
+    //
+    // READ  : diizinkan untuk semua (termasuk unauthenticated App) agar
+    //         Dashboard dapat menampilkan status locker secara real-time.
+    //
+    // WRITE : `if false` — BUKAN berarti tidak ada yang bisa menulis.
+    //         Firebase Admin SDK (digunakan oleh Cloud Functions) secara
+    //         desain BYPASS semua Firestore security rules sepenuhnya.
+    //         Artinya Cloud Functions tetap dapat menulis ke collection ini
+    //         tanpa batasan. Rule `if false` hanya memblokir penulisan
+    //         langsung dari client SDK (App / browser), yang memang tidak
+    //         boleh memodifikasi data locker secara langsung.
+    //
     match /lockers/{lockerId} {
       allow read: if true;
-      allow write: if false; // Cloud Functions menggunakan Admin SDK (bypass rules)
+      allow write: if false; // Client diblokir; Cloud Functions (Admin SDK) bypass rules ini
     }
 
     // ── transactions collection ─────────────────────────────────────────
-    // Tidak ada akses langsung dari App
-    // Hanya Cloud Functions (Admin SDK) yang boleh read/write
+    //
+    // READ & WRITE : keduanya `if false` untuk client SDK.
+    //
+    // Transaksi hanya dibuat, diperbarui, dan dibaca oleh Cloud Functions
+    // menggunakan Admin SDK (bypass rules). App tidak pernah mengakses
+    // collection ini secara langsung — semua informasi yang dibutuhkan App
+    // sudah tersedia melalui field `state` dan `activeTransactionId` di
+    // collection `lockers`.
+    //
     match /transactions/{transactionId} {
-      allow read, write: if false;
+      allow read, write: if false; // Hanya Cloud Functions (Admin SDK) yang boleh akses
     }
 
     // ── Semua dokumen lain: deny by default ─────────────────────────────
+    //
+    // Catch-all rule: tolak semua akses ke collection / dokumen lain yang
+    // tidak secara eksplisit didefinisikan di atas. Ini adalah praktik
+    // keamanan standar (deny-by-default / principle of least privilege).
+    //
     match /{document=**} {
       allow read, write: if false;
     }

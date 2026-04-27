@@ -16,14 +16,27 @@ admin.initializeApp({
 const db = admin.firestore();
 const rtdb = admin.database();
 
+// Ubah nilai ini untuk seed lebih banyak locker (misal: 12, 24, 100)
 const LOCKER_COUNT = 6;
+
+/**
+ * Menghasilkan lockerId dengan zero-padding yang benar untuk jumlah locker berapa pun.
+ * Contoh: LOCKER_COUNT=6  → locker-1..locker-6
+ *         LOCKER_COUNT=10 → locker-01..locker-10
+ *         LOCKER_COUNT=100 → locker-001..locker-100
+ */
+function makeDeviceId(index: number): string {
+  const digits = String(LOCKER_COUNT).length; // lebar padding sesuai total locker
+  const padded = String(index).padStart(digits, "0");
+  return `locker-${padded}`;
+}
 
 async function seedLockers() {
   console.log(`Seeding ${LOCKER_COUNT} lockers...`);
   const batch = db.batch();
 
   for (let i = 1; i <= LOCKER_COUNT; i++) {
-    const lockerId = `locker-0${i}`;
+    const lockerId = makeDeviceId(i);
     const ref = db.collection("lockers").doc(lockerId);
     batch.set(ref, {
       lockerId,
@@ -44,7 +57,7 @@ async function seedLockers() {
 async function seedRtdbDevices() {
   console.log("Seeding RTDB device nodes...");
   for (let i = 1; i <= LOCKER_COUNT; i++) {
-    const deviceId = `locker-0${i}`;
+    const deviceId = makeDeviceId(i);
     await rtdb.ref(`devices/${deviceId}`).set({
       command: "",
       commandAt: 0,

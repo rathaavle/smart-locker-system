@@ -1,23 +1,61 @@
 {
   "rules": {
+    /*
+     * RTDB Security Rules — Smart Locker System
+     *
+     * Tiga aktor yang berinteraksi dengan RTDB:
+     *   1. Cloud Functions (Admin SDK)  — BYPASS semua rules, selalu bisa read/write
+     *   2. ESP8266 device               — autentikasi dengan Firebase Auth (database secret /
+     *                                     service account); rules di bawah mengatur aksesnya
+     *   3. Flutter App                  — TIDAK mengakses RTDB sama sekali (hanya Firestore)
+     *
+     * Prinsip least-privilege per field:
+     *   command    : device READ (menerima perintah unlock), Cloud Functions WRITE via Admin SDK
+     *   commandAt  : device READ (cek staleness), Cloud Functions WRITE via Admin SDK
+     *   doorStatus : device WRITE (update sensor), Cloud Functions READ via Admin SDK
+     *   heartbeat  : device WRITE (keepalive), Cloud Functions READ via Admin SDK
+     */
     "devices": {
       "$deviceId": {
-        ".read": false,
-        ".write": false,
-        "doorStatus": {
-          ".read": true,
-          ".validate": "newData.isString() && (newData.val() === 'OPEN' || newData.val() === 'CLOSED')"
-        },
-        "heartbeat": {
-          ".read": true,
-          ".validate": "newData.isNumber()"
-        },
+        /*
+         * command — ditulis oleh Cloud Functions (Admin SDK, bypass rules).
+         * Device membaca field ini untuk mengetahui apakah ada perintah UNLOCK.
+         * Client lain (App) tidak boleh membaca atau menulis.
+         */
         "command": {
-          ".read": false,
+          ".read": "auth != null",
+          ".write": false,
           ".validate": "newData.isString() && (newData.val() === 'UNLOCK' || newData.val() === '')"
         },
+
+        /*
+         * commandAt — ditulis bersama command oleh Cloud Functions (Admin SDK).
+         * Device membaca ini untuk mendeteksi stale command (> 30 detik → discard).
+         */
         "commandAt": {
+          ".read": "auth != null",
+          ".write": false,
+          ".validate": "newData.isNumber()"
+        },
+
+        /*
+         * doorStatus — ditulis oleh device setiap kali sensor berubah.
+         * Cloud Functions membaca via Admin SDK (bypass rules) untuk state transitions.
+         * Client lain tidak boleh membaca langsung dari RTDB.
+         */
+        "doorStatus": {
           ".read": false,
+          ".write": "auth != null",
+          ".validate": "newData.isString() && (newData.val() === 'OPEN' || newData.val() === 'CLOSED')"
+        },
+
+        /*
+         * heartbeat — ditulis oleh device setiap 30 detik sebagai keepalive.
+         * Cloud Functions membaca via Admin SDK untuk mendeteksi device offline.
+         */
+        "heartbeat": {
+          ".read": false,
+          ".write": "auth != null",
           ".validate": "newData.isNumber()"
         }
       }
