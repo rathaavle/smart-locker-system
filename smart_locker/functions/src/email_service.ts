@@ -1,4 +1,6 @@
-import * as nodemailer from "nodemailer";
+// nodemailer import will be used in Task 6 implementation
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import * as _nodemailer from "nodemailer";
 
 export interface EmailParams {
   email: string;

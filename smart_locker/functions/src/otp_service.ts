@@ -2,6 +2,7 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import * as bcrypt from "bcrypt";
+import { sendOtpEmail } from "./email_service";
 
 // Initialize admin if not already initialized
 if (!admin.apps.length) {
@@ -67,12 +68,156 @@ export function isOtpExpired(createdAt: admin.firestore.Timestamp): boolean {
 // ── Callable Functions ─────────────────────────────────────────────────────
 
 export const initiateCheckIn = functions.https.onCall(
-  async (data: CheckInRequest, context) => {
-    // TODO: implement in Task 4
-    throw new functions.https.HttpsError(
-      "unimplemented",
-      "Not implemented yet",
-    );
+  async (data: CheckInRequest, _context) => {
+    // ── Input validation ──────────────────────────────────────────────────
+    const { lockerId, email } = data;
+
+    if (!lockerId || typeof lockerId !== "string" || lockerId.trim() === "") {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "lockerId is required",
+      );
+    }
+
+    if (!email || typeof email !== "string" || email.trim() === "") {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "email is required",
+      );
+    }
+
+    // Basic email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "email format is invalid",
+      );
+    }
+
+    const db = admin.firestore();
+    const rtdb = admin.database();
+
+    // ── Firestore transaction: atomically check locker and create transaction ──
+    let transactionId: string;
+    let otp: string;
+
+    try {
+      const result = await db.runTransaction(async (txn) => {
+        const lockerRef = db.collection("lockers").doc(lockerId);
+        const lockerSnap = await txn.get(lockerRef);
+
+        if (!lockerSnap.exists) {
+          throw new functions.https.HttpsError("not-found", "Locker not found");
+        }
+
+        const locker = lockerSnap.data()!;
+
+        // Check isOnline
+        if (!locker.isOnline) {
+          throw new functions.https.HttpsError(
+            "failed-precondition",
+            "LOCKER_OFFLINE",
+          );
+        }
+
+        // Check state === EMPTY
+        if (locker.state !== "EMPTY") {
+          throw new functions.https.HttpsError(
+            "failed-precondition",
+            "LOCKER_NOT_AVAILABLE",
+          );
+        }
+
+        // Check no concurrent transaction (race condition guard)
+        if (
+          locker.activeTransactionId !== null &&
+          locker.activeTransactionId !== undefined
+        ) {
+          throw new functions.https.HttpsError(
+            "failed-precondition",
+            "LOCKER_CONFLICT",
+          );
+        }
+
+        // Generate transaction ID, OTP, and hash
+        const newTransactionId = db.collection("transactions").doc().id;
+        const plainOtp = generateOtp();
+        const otpHash = await hashOtp(plainOtp);
+
+        const now = admin.firestore.Timestamp.now();
+        const otpExpiresAt = admin.firestore.Timestamp.fromMillis(
+          now.toMillis() + OTP_EXPIRY_HOURS * 60 * 60 * 1000,
+        );
+
+        // Write transaction document
+        const transactionRef = db
+          .collection("transactions")
+          .doc(newTransactionId);
+        txn.set(transactionRef, {
+          transactionId: newTransactionId,
+          lockerId: lockerId,
+          userEmail: email.trim(),
+          otpHash: otpHash,
+          otpExpiresAt: otpExpiresAt,
+          checkInAt: now,
+          checkOutAt: null,
+          status: "ACTIVE",
+          openAlertSentAt: null,
+        });
+
+        // Update locker: set activeTransactionId and state to UNLOCKING
+        txn.update(lockerRef, {
+          activeTransactionId: newTransactionId,
+          state: "UNLOCKING",
+        });
+
+        return { newTransactionId, plainOtp };
+      });
+
+      transactionId = result.newTransactionId;
+      otp = result.plainOtp;
+    } catch (err) {
+      // Re-throw HttpsErrors as-is
+      if (err instanceof functions.https.HttpsError) {
+        throw err;
+      }
+      functions.logger.error("Firestore transaction failed", err);
+      throw new functions.https.HttpsError(
+        "internal",
+        "Failed to create transaction",
+      );
+    }
+
+    // ── Write UNLOCK command to RTDB ──────────────────────────────────────
+    // deviceId is the same as lockerId (e.g., "locker-01")
+    const commandAt = Math.floor(Date.now() / 1000); // Unix timestamp in seconds
+    try {
+      await rtdb.ref(`devices/${lockerId}`).update({
+        command: "UNLOCK",
+        commandAt: commandAt,
+      });
+    } catch (err) {
+      functions.logger.error("Failed to write UNLOCK command to RTDB", err);
+      // Non-fatal: transaction is already committed; log and continue
+    }
+
+    // ── Send OTP email ────────────────────────────────────────────────────
+    const emailResult = await sendOtpEmail({
+      email: email.trim(),
+      otp: otp,
+      lockerId: lockerId,
+    });
+
+    if (!emailResult.success) {
+      functions.logger.error("Email delivery failed", emailResult.error);
+      throw new functions.https.HttpsError("internal", "EMAIL_DELIVERY_FAILED");
+    }
+
+    return {
+      success: true,
+      message: `OTP sent to ${email.trim()}. Transaction ID: ${transactionId}`,
+    };
   },
 );
 
