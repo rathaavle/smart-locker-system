@@ -1,0 +1,25 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+// WiFi credentials
+#define WIFI_SSID "your-wifi-ssid"
+#define WIFI_PASSWORD "your-wifi-password"
+
+// Firebase configuration
+#define FIREBASE_HOST "your-project.firebaseio.com"
+#define FIREBASE_AUTH "your-database-secret-or-token"
+
+// Device configuration
+#define DEVICE_ID "locker-01"
+
+// Hardware pins
+#define RELAY_PIN D1       // GPIO5
+#define SENSOR_PIN D2      // GPIO4
+
+// Timing (milliseconds)
+#define RELAY_DURATION_MS 4000    // 4 seconds (within 3000-5000 range)
+#define WIFI_RETRY_INTERVAL_MS 5000
+#define HEARTBEAT_INTERVAL_MS 30000
+#define STALE_COMMAND_THRESHOLD_MS 30000
+
+#endif // CONFIG_H

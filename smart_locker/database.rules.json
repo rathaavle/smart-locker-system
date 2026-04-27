@@ -1,0 +1,26 @@
+{
+  "rules": {
+    "devices": {
+      "$deviceId": {
+        ".read": false,
+        ".write": false,
+        "doorStatus": {
+          ".read": true,
+          ".validate": "newData.isString() && (newData.val() === 'OPEN' || newData.val() === 'CLOSED')"
+        },
+        "heartbeat": {
+          ".read": true,
+          ".validate": "newData.isNumber()"
+        },
+        "command": {
+          ".read": false,
+          ".validate": "newData.isString() && (newData.val() === 'UNLOCK' || newData.val() === '')"
+        },
+        "commandAt": {
+          ".read": false,
+          ".validate": "newData.isNumber()"
+        }
+      }
+    }
+  }
+}
