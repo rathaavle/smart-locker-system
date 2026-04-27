@@ -233,7 +233,7 @@ void main() {
         ),
       );
 
-      await tester.pumpAndSettle();
+      await tester.pump(); // Use pump() instead of pumpAndSettle() for animated widgets
 
       expect(find.text('Unlocking'), findsOneWidget);
       // CircularProgressIndicator is shown for unlocking state

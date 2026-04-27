@@ -24,7 +24,7 @@ dev_dependencies:
   flutter_lints: ^4.0.0
   build_runner: ^2.4.11
   riverpod_generator: ^2.4.0
-  glados: ^0.5.0
+  glados: ^1.1.7
 
 flutter:
   uses-material-design: true

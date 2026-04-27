@@ -13,7 +13,7 @@
  */
 
 import * as admin from "firebase-admin";
-import * as test from "firebase-functions-test";
+import test from "firebase-functions-test";
 
 // Initialize Firebase Functions Test SDK
 const testEnv = test();
@@ -247,11 +247,11 @@ describe("Integration Test: Heartbeat and Online/Offline Transitions", () => {
     });
 
     // Get initial update time
-    const initialSnap = await db
-      .collection("lockers")
-      .doc(TEST_LOCKER_ID)
-      .get();
-    const initialUpdateTime = initialSnap.updateTime;
+    // const initialSnap = await db
+    //   .collection("lockers")
+    //   .doc(TEST_LOCKER_ID)
+    //   .get();
+    // const initialUpdateTime = initialSnap.updateTime; // Not used in this test
 
     // Run the scheduled heartbeat check function
     const wrapped = testEnv.wrap(checkHeartbeats);

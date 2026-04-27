@@ -17,7 +17,7 @@
  */
 
 import * as admin from "firebase-admin";
-import * as test from "firebase-functions-test";
+import test from "firebase-functions-test";
 import { generateOtp, hashOtp } from "../../src/otp_service";
 
 // Initialize Firebase Functions Test SDK

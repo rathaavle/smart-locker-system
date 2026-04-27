@@ -16,7 +16,7 @@
  */
 
 import * as admin from "firebase-admin";
-import * as test from "firebase-functions-test";
+import test from "firebase-functions-test";
 
 // Initialize Firebase Functions Test SDK
 const testEnv = test();

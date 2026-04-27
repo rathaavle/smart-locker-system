@@ -1,20 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:glados/glados.dart';
-import 'package:smart_locker_app/models/locker.dart';
-import 'package:smart_locker_app/widgets/locker_card.dart';
+import 'dart:math';
 
 // Feature: smart-locker-system, Property 21: Visual state distinction
 // Validates: Requirements 10.3
 
 void main() {
   group('Property 21: Visual State Distinction', () {
-    Glados2<LockerVisualState, LockerVisualState>().test(
-      'Different states produce different visual representations',
-      (state1, state2) {
+    test('Different states produce different visual representations', () {
+      final random = Random(42); // Fixed seed for reproducibility
+      
+      // Run property test with 100 iterations
+      for (int i = 0; i < 100; i++) {
+        // Generate two different visual states
+        final state1 = _generateRandomVisualState(random);
+        final state2 = _generateRandomVisualState(random);
+        
         // Skip if states are the same
         if (state1 == state2) {
-          return;
+          continue;
         }
 
         // Get visual representations
@@ -27,10 +31,9 @@ void main() {
                            visual1.icon != visual2.icon;
 
         expect(isDifferent, isTrue,
-            reason: 'States $state1 and $state2 must have different visual representations');
-      },
-      maxRuns: 100,
-    );
+            reason: 'States $state1 and $state2 must have different visual representations (iteration $i)');
+      }
+    });
   });
 }
 
@@ -79,15 +82,14 @@ VisualRepresentation getVisualRepresentation(LockerVisualState state) {
   }
 }
 
-/// Generator for arbitrary LockerVisualState
-extension LockerVisualStateArbitrary on Glados<LockerVisualState> {
-  Glados<LockerVisualState> get lockerVisualState {
-    return any.choose([
-      LockerVisualState.empty,
-      LockerVisualState.filled,
-      LockerVisualState.open,
-      LockerVisualState.unlocking,
-      LockerVisualState.offline,
-    ]);
-  }
+/// Generate a random LockerVisualState
+LockerVisualState _generateRandomVisualState(Random random) {
+  final states = [
+    LockerVisualState.empty,
+    LockerVisualState.filled,
+    LockerVisualState.open,
+    LockerVisualState.unlocking,
+    LockerVisualState.offline,
+  ];
+  return states[random.nextInt(states.length)];
 }
