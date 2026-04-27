@@ -1,9 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:equatable/equatable.dart';
 
 enum TransactionStatus { active, completed, manualReview }
 
-// TODO: implement full model in Task 13.1
-class LockerTransaction {
+class LockerTransaction extends Equatable {
   final String transactionId;
   final String lockerId;
   final String userEmail;
@@ -27,12 +27,73 @@ class LockerTransaction {
   });
 
   factory LockerTransaction.fromFirestore(DocumentSnapshot doc) {
-    // TODO: implement in Task 13.1
-    throw UnimplementedError();
+    final data = doc.data() as Map<String, dynamic>;
+    
+    return LockerTransaction(
+      transactionId: data['transactionId'] as String,
+      lockerId: data['lockerId'] as String,
+      userEmail: data['userEmail'] as String,
+      otpHash: data['otpHash'] as String?,
+      otpExpiresAt: (data['otpExpiresAt'] as Timestamp).toDate(),
+      checkInAt: (data['checkInAt'] as Timestamp).toDate(),
+      checkOutAt: (data['checkOutAt'] as Timestamp?)?.toDate(),
+      status: _parseTransactionStatus(data['status'] as String),
+      openAlertSentAt: (data['openAlertSentAt'] as Timestamp?)?.toDate(),
+    );
   }
 
   Map<String, dynamic> toMap() {
-    // TODO: implement in Task 13.1
-    throw UnimplementedError();
+    return {
+      'transactionId': transactionId,
+      'lockerId': lockerId,
+      'userEmail': userEmail,
+      'otpHash': otpHash,
+      'otpExpiresAt': Timestamp.fromDate(otpExpiresAt),
+      'checkInAt': Timestamp.fromDate(checkInAt),
+      'checkOutAt': checkOutAt != null 
+          ? Timestamp.fromDate(checkOutAt!) 
+          : null,
+      'status': _transactionStatusToString(status),
+      'openAlertSentAt': openAlertSentAt != null 
+          ? Timestamp.fromDate(openAlertSentAt!) 
+          : null,
+    };
   }
+
+  static TransactionStatus _parseTransactionStatus(String value) {
+    switch (value.toUpperCase()) {
+      case 'ACTIVE':
+        return TransactionStatus.active;
+      case 'COMPLETED':
+        return TransactionStatus.completed;
+      case 'MANUAL_REVIEW':
+        return TransactionStatus.manualReview;
+      default:
+        throw ArgumentError('Invalid transaction status: $value');
+    }
+  }
+
+  static String _transactionStatusToString(TransactionStatus status) {
+    switch (status) {
+      case TransactionStatus.active:
+        return 'ACTIVE';
+      case TransactionStatus.completed:
+        return 'COMPLETED';
+      case TransactionStatus.manualReview:
+        return 'MANUAL_REVIEW';
+    }
+  }
+
+  @override
+  List<Object?> get props => [
+        transactionId,
+        lockerId,
+        userEmail,
+        otpHash,
+        otpExpiresAt,
+        checkInAt,
+        checkOutAt,
+        status,
+        openAlertSentAt,
+      ];
 }
